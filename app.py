@@ -10,50 +10,12 @@ import re
 import json
 import math
 import random
-import time
-import bisect
-import textwrap
-import pickle
 from datetime import datetime, timedelta
-from dataclasses import dataclass, field
-from collections import defaultdict, Counter
-
 import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
-
-from scipy.sparse import hstack, csr_matrix
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import (
-    classification_report,
-    accuracy_score,
-    precision_score,
-    recall_score,
-    f1_score,
-    roc_auc_score,
-    precision_recall_curve,
-    auc
-)
-from sklearn.ensemble import IsolationForest
-from sklearn.svm import OneClassSVM
-from sklearn.preprocessing import StandardScaler
-from sklearn.decomposition import PCA
-from sklearn.model_selection import train_test_split
-
-try:
-    from google import genai
-    GENAI_AVAILABLE = True
-except ImportError:
-    GENAI_AVAILABLE = False
-
-try:
-    from sentence_transformers import SentenceTransformer
-    SENTENCE_TRANSFORMERS_AVAILABLE = True
-except ImportError:
-    SENTENCE_TRANSFORMERS_AVAILABLE = False
 
 # Reconfigure stdout to print Unicode characters safely
 sys.stdout.reconfigure(encoding='utf-8', errors='backslashreplace')
@@ -62,8 +24,6 @@ sys.stdout.reconfigure(encoding='utf-8', errors='backslashreplace')
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
-import dataset_generator
-
 # Set page configuration
 st.set_page_config(
     page_title="TraceAnalyst AI - Train-Test Validation Studio",
@@ -71,43 +31,16 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import classification_report
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+# Try importing Google GenAI SDK and initializing Gemini Client
+try:
+    from google import genai
+    GENAI_AVAILABLE = True
+except ImportError:
+    GENAI_AVAILABLE = False
 
 ai_gemini_client = None
 if GENAI_AVAILABLE:
@@ -573,9 +506,9 @@ def render_st22_dump_to_string(template_key, label, timestamp, category=None):
 # SECTION: DATA PROVIDER (MOCK DATA & BASELINE PATTERNS)
 # ======================================================================
 # Data Provider for SAP Forensics Sandbox
-
-
-
+import time
+import random
+from datetime import datetime, timedelta
 
 # Base Initial Logs (from mockData.ts)
 INITIAL_MOCK_LOGS = [
@@ -665,15 +598,15 @@ W  ***LOG HTTP=> Auth check failed for IP 10.0.0.15""",
     }
 ]
 
-
-
-
-
-
-
-
-
-
+INITIAL_TREND_DATA = [
+    {"time": "08:00", "critical": 2, "warning": 5, "normal": 20},
+    {"time": "09:00", "critical": 5, "warning": 8, "normal": 35},
+    {"time": "10:00", "critical": 1, "warning": 12, "normal": 42},
+    {"time": "11:00", "critical": 8, "warning": 15, "normal": 55},
+    {"time": "12:00", "critical": 12, "warning": 22, "normal": 48},
+    {"time": "13:00", "critical": 3, "warning": 10, "normal": 30},
+    {"time": "14:00", "critical": 0, "warning": 4, "normal": 15},
+]
 
 # Initial Generic Logs
 REAL_WORLD_ST22_DUMP = render_st22_dump_to_string('dataset_not_open', 'DATASET_NOT_OPEN', (datetime.now() - timedelta(hours=1)).strftime('%Y-%m-%d %H:%M:%S'))
@@ -736,317 +669,317 @@ def get_initial_generic_logs():
     }
 
 # Dynamic anomalies generator mapping (same as TS / Fallbacks or Alerts logs)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+ANOMALY_TEMPLATES = [
+    {
+        "id_pattern": "tsv_alloc",
+        "semanticGroup": "TSV_TNEW_PAGE_ALLOC_FAILED",
+        "severity": "Critical",
+        "rawLog": "M  *** ERROR => TSV_TNEW_PAGE_ALLOC_FAILED memory exhausted [abpage.c 1042]\nA  *** ERROR => Process dev_w3 terminated",
+        "aiSummary": "ABAP short dump allocated all paging and roll table boundaries, causing immediate job abortion.",
+        "aiRootCause": "A report queried a massive dataset using open joins without pagination.",
+        "aiSolution": "1. Check ST22 memory dumps.\n2. Optimize report using PACKAGE SIZE selectors."
+    },
+    {
+        "id_pattern": "time_out",
+        "semanticGroup": "TIME_OUT",
+        "severity": "Critical",
+        "rawLog": "M  *** EXCEPTION => TIME_OUT Max Run Time Exceeded [thxxhead.c 602]\nW  *** WARNING => Work process restarted after timeout handler",
+        "aiSummary": "Work process terminated by system watchdog dispatcher due to exceeding max execution limits.",
+        "aiRootCause": "A transaction ran into database deadlock or unindexed loop recursion.",
+        "aiSolution": "1. Check active process list in SM50.\n2. Tune 'rdisp/max_wprun_time'."
+    },
+    {
+        "id_pattern": "dbif_sql",
+        "semanticGroup": "DBIF_REPO_SQL_ERROR",
+        "severity": "Critical",
+        "rawLog": "C  *** ERROR => DBIF_REPO_SQL_ERROR: Table index corrupt [dboci.c 601]\nC  *** ERROR => Accessing table DD02L returned protocol exceptions",
+        "aiSummary": "The database interface failed to sync structural descriptions due to dictionary index inconsistencies.",
+        "aiRootCause": "HANA page cache mismatch or metadata locks contention during background schema updates.",
+        "aiSolution": "1. Run database structure checks in SE11 / SM30.\n2. Apply SAP Note 984572."
+    },
+    {
+        "id_pattern": "dataset_not_open",
+        "semanticGroup": "DATASET_NOT_OPEN",
+        "severity": "Warning",
+        "rawLog": "A  *** WARNING => OPEN DATASET failed: DATASET_NOT_OPEN [thxxcfg.c 155]",
+        "aiSummary": "File operation on shared storage failed because target filesystem locks were still held by work processes.",
+        "aiRootCause": "The routine failed to invoke OPEN DATASET command before executing data streaming commands.",
+        "aiSolution": "Check program write statements and ensure datasets are opened in valid read/write modes."
+    },
+    {
+        "id_pattern": "dlopen_failed",
+        "semanticGroup": "DlLoadLib FAILED (libsapvsa.so)",
+        "severity": "Critical",
+        "rawLog": "M  *** ERROR => DlLoadLib()==DLENOACCESS - dlopen(\"libsapvsa.so\") FAILED! (64-bit)\nM  *** ERROR => Cannot load active virus scan interface library [libsapvsa.c 284]",
+        "aiSummary": "Work process was unable to load the dynamic link library libsapvsa.so due to access control or path resolution permissions.",
+        "aiRootCause": "The shared object file libsapvsa.so is missing from /usr/sap/SYS/global/security/lib or its file permission modes prevent execution by the sidadm user.",
+        "aiSolution": "1. Verify libsapvsa.so exists in kernel directory /usr/sap/SID/SYS/exe/run.\n2. Ensure permissions are set to 755 (rwxr-xr-x) for sidadm user.\n3. Check SAP Note 1484803."
+    },
+    {
+        "id_pattern": "db_commit_failed",
+        "semanticGroup": "COMMIT on connection 0 failed",
+        "severity": "Critical",
+        "rawLog": "C  *** ERROR => COMMIT on connection 0 failed. rc=129\nC  *** ERROR => Transaction context rollback initiated by DB interface [dbsql.c 1084]",
+        "aiSummary": "A database transaction commit failed with return code 129, forcing a roll-back of current workprocess mutations.",
+        "aiRootCause": "HANA database transaction lock wait timeout exceeded, or database connection lost/timed out during update task execution.",
+        "aiSolution": "1. Examine transaction locks in DB02 / ST04.\n2. Check for long-running blocking processes or deadlocks.\n3. Inspect developer traces for database connection status."
+    },
+    {
+        "id_pattern": "db_execute_failed",
+        "semanticGroup": "EXECUTE on connection 0 failed",
+        "severity": "Critical",
+        "rawLog": "C  *** ERROR => EXECUTE C_0017 on connection 0, rc=139\nC  *** ERROR => SQL protocol violation or memory limit exceeded [dboci.c 2984]",
+        "aiSummary": "Execution of statement C_0017 on DB connection 0 failed with database return code 139.",
+        "aiRootCause": "SQL syntax exception or index corruption in the queried table, or resource exhaustion in the DB engine.",
+        "aiSolution": "1. Re-index table DD02L or affected application table.\n2. Analyze SQL statement trace in ST05."
+    },
+    {
+        "id_pattern": "call_function_remote_error",
+        "semanticGroup": "CALL_FUNCTION_REMOTE_ERROR",
+        "severity": "Critical",
+        "rawLog": "A  *** ERROR => Logon of Jobstep User Failed [sign.c 18085]\nA  *** ERROR => Remote function call aborted by destination application gateway.",
+        "aiSummary": "Remote function call (RFC) terminated because the destination system rejected the background logon request.",
+        "aiRootCause": "Expired background logon password or locked background user account in target client.",
+        "aiSolution": "1. Check RFC destination settings in SM59.\n2. Verify logon credentials of target user in SU01.\n3. Check SAP Note 123845."
+    }
+]
+
+
+STATIC_MASTER_PATTERNS = [
+    {
+        "id": "ora-03113",
+        "name": "Database communication limits scheduler (ORA-03113)",
+        "category": "System Logs (SM21)",
+        "searchTerms": ["ORA-03113", "OCIStmtExecute"],
+        "affectedComponent": "Oracle Database Link Client",
+        "recommendation": "Check oracle server listener log, verify intermediate firewall timeouts, and review SAP Note 598583.",
+        "description": "Identifies query execution drops due to severing of Oracle communication shadow processes.",
+        "timeToImpact": "< 10 mins",
+        "baseLikelihood": 12,
+        "ruleInfo": 'Scans: "ORA-03113", "OCIStmtExecute"',
+        "base": "Note 598583"
+    },
+    {
+        "id": "roll-exh",
+        "name": "ztta/roll_extension Memory Exhaustion",
+        "category": "Work Process (dev_w*)",
+        "searchTerms": ["roll_extension exhausted", "roll_extension"],
+        "affectedComponent": "NetWeaver Memory Manager",
+        "recommendation": "Review user context allocations in ST02, adjust ztta/roll_extension parameter dynamically in RZ11.",
+        "description": "Monitors heap memory utilization thresholds per work process before short dump allocation failures.",
+        "timeToImpact": "< 15 mins",
+        "baseLikelihood": 8,
+        "ruleInfo": 'Scans: "roll_extension exhausted"',
+        "base": "Note 1863579"
+    },
+    {
+        "id": "http-401",
+        "name": "HTTP 401 Unauthorized warning",
+        "category": "Work Process (dev_w*)",
+        "searchTerms": ["HTTP 401", "Auth check failed"],
+        "affectedComponent": "ICF Internet Communication Framework",
+        "recommendation": "Confirm incoming client SSL certificates, check webgui configuration, and check user locks in SU01.",
+        "description": "Monitors authentication validation drops on REST endpoints or active webgui pages.",
+        "timeToImpact": "< 5 mins",
+        "baseLikelihood": 15,
+        "ruleInfo": 'Scans: "HTTP 401", "Auth check failed"',
+        "base": "Note 1737415"
+    },
+    {
+        "id": "enq-full",
+        "name": "Enqueue lock table limit",
+        "category": "Work Process (dev_w*)",
+        "searchTerms": ["Enqueue table overflow", "lock buffer limit"],
+        "affectedComponent": "Enqueue Server replication daemon",
+        "recommendation": "Examine lock table entries in SM12, segment heavy update batch schedules, and increase enque/table_size profile parameter.",
+        "description": "Identifies replication lock depletion risks that freeze concurrent update statements.",
+        "timeToImpact": "< 10 mins",
+        "baseLikelihood": 6,
+        "ruleInfo": 'Scans: "Enqueue table overflow", "lock buffer limit"',
+        "base": "Note 2085980"
+    },
+    {
+        "id": "shm-full",
+        "name": "Dispatcher Shared Memory full",
+        "category": "Work Process (dev_w*)",
+        "searchTerms": ["DP_SHM_FULL", "Shared Memory"],
+        "affectedComponent": "Dispatcher local IPC manager",
+        "recommendation": "Verify host IPC configuration, tune OS kernel settings (shmmax, shmall), and clear system cache buffer entries.",
+        "description": "Search for dispatcher queue exhaustions where active process tasks saturate allocated process spaces.",
+        "timeToImpact": "< 5 mins",
+        "baseLikelihood": 5,
+        "ruleInfo": 'Scans: "DP_SHM_FULL", "Shared Memory"',
+        "base": "Note 631024"
+    },
+    {
+        "id": "tsv-alloc",
+        "name": "TSV_TNEW_PAGE_ALLOC_FAILED Dump",
+        "category": "ABAP Dumps (ST22)",
+        "searchTerms": ["TSV_TNEW_PAGE_ALLOC_FAILED", "PAGE_ALLOC_FAILED"],
+        "affectedComponent": "ABAP Virtual Machine / paging",
+        "recommendation": "Ensure standard indexing on heavy database selectors. Review ABAP SELECT loop packet aggregates.",
+        "description": "Identifies immediate processing dumps where internal arrays exceed maximum allocatable runtime pages.",
+        "timeToImpact": "Immediate",
+        "baseLikelihood": 10,
+        "ruleInfo": 'Scans: "TSV_TNEW_PAGE_ALLOC_FAILED", "alloc failed"',
+        "base": "Note 1863579"
+    },
+    {
+        "id": "time-out",
+        "name": "TIME_OUT Long-running Abort",
+        "category": "ABAP Dumps (ST22)",
+        "searchTerms": ["TIME_OUT"],
+        "affectedComponent": "Dialog Work Process Watchdog",
+        "recommendation": "Inspect long-running processes using SM50. Run background processes on BTC rather than DIA threads; optimize heavy queries.",
+        "description": "Detects work processes terminated abruptly by the dispatcher because execution exceeded the rdisp/max_wprun_time limit.",
+        "timeToImpact": "Immediate",
+        "baseLikelihood": 14,
+        "ruleInfo": 'Scans: "TIME_OUT"',
+        "base": "Note 500302"
+    },
+    {
+        "id": "dbif-sql",
+        "name": "DBIF_REPO_SQL_ERROR Client Fault",
+        "category": "ABAP Dumps (ST22)",
+        "searchTerms": ["DBIF_REPO_SQL_ERROR", "DBIF_REPO_SQL", "DBIF_RSQL_"],
+        "affectedComponent": "Database Repository Client",
+        "recommendation": "Re-generate database buffer directories, update database stats, and verify table structural sync via SE14.",
+        "description": "Monitors consistency mismatches between active physical table models and active runtime structures.",
+        "timeToImpact": "Immediate",
+        "baseLikelihood": 6,
+        "ruleInfo": 'Scans: "DBIF_REPO_SQL_ERROR", "DBIF_RSQL_"',
+        "base": "Note 141203"
+    },
+    {
+        "id": "msg-type-x",
+        "name": "MESSAGE_TYPE_X Critical Assertion",
+        "category": "ABAP Dumps (ST22)",
+        "searchTerms": ["MESSAGE_TYPE_X"],
+        "affectedComponent": "ABAP Kernel Task Handler",
+        "recommendation": "Examine short dump logs in ST22 to locate the dynamic assertion line. Check transactional prerequisites in customizing.",
+        "description": "Monitors explicit kernel termination gates designed to abort transaction loops when an invariant state check fails.",
+        "timeToImpact": "Immediate",
+        "baseLikelihood": 10,
+        "ruleInfo": 'Scans: "MESSAGE_TYPE_X"',
+        "base": "Note 30284"
+    },
+    {
+        "id": "r49-comm",
+        "name": "R49 Gateway RFC Disconnection",
+        "category": "System Logs (SM21)",
+        "searchTerms": ["R49", "Communication error"],
+        "affectedComponent": "RFC Access Gateway Reader",
+        "recommendation": "Inspect connection trace logs under SM59. Check routing gateway status, local port rules, and load balancers.",
+        "description": "Evaluates logical network drops or connection limits in background remote communication paths.",
+        "timeToImpact": "< 15 mins",
+        "baseLikelihood": 18,
+        "ruleInfo": 'Scans: "R49", "Communication error"',
+        "base": "Note 5959"
+    },
+    {
+        "id": "f30-db",
+        "name": "F30 Logical Database Error",
+        "category": "System Logs (SM21)",
+        "searchTerms": ["F30", "Database error"],
+        "affectedComponent": "Database Access Interface",
+        "recommendation": "Review database driver versions and trace logs. Confirm matching security schemas across schemas.",
+        "description": "Monitors logic-level queries returned with driver errors, indicating schema or lock conflicts.",
+        "timeToImpact": "< 10 mins",
+        "baseLikelihood": 11,
+        "ruleInfo": 'Scans: "F30", "Database error"',
+        "base": "Note 3011"
+    },
+    {
+        "id": "q0g-logon",
+        "name": "Q0G Logon Failure",
+        "category": "System Logs (SM21)",
+        "searchTerms": ["Q0G", "Failed logon"],
+        "affectedComponent": "User Authentication / Security",
+        "recommendation": "Block source IP address if unexpected, review access policies in SU01, and enforce secure account lock defaults.",
+        "description": "Flags active credential failures that signal expired connection accounts or security policy breaches.",
+        "timeToImpact": "< 30 mins",
+        "baseLikelihood": 15,
+        "ruleInfo": 'Scans: "Q0G", "Failed logon"',
+        "base": "Note 1737415"
+    },
+    {
+        "id": "high-dia",
+        "name": "High Dialog Response Time (>3s)",
+        "category": "Workload (ST03)",
+        "searchTerms": ["High Dialog Response Time", "Resp: 3", "Resp: 4", "Resp: 5", "Resp: 6", "Resp: 7", "Resp: 8", "Resp: 9"],
+        "affectedComponent": "Dialog Queue Scheduler",
+        "recommendation": "Isolate heavy transactional codes inside ST03N. Target and rebuild missing indexes on frequently touched tables.",
+        "description": "Monitors response latency thresholds that cause interactive screen stutter and user lockouts.",
+        "timeToImpact": "< 10 mins",
+        "baseLikelihood": 20,
+        "ruleInfo": 'Scans: "Dialog Response Time"',
+        "base": "Note 100302"
+    },
+    {
+        "id": "high-db",
+        "name": "High DB Request Latency",
+        "category": "Workload (ST03)",
+        "searchTerms": ["High DB Request Time", "DB: 2", "DB: 3", "DB: 4", "DB: 5", "DB: 6", "DB: 7", "DB: 8", "DB: 9"],
+        "affectedComponent": "Database Query Optimizer",
+        "recommendation": "Re-analyze database statistics on highlighted tables, execute DB02 checkups, and check buffer parameters.",
+        "description": "Tracks delay times within database reading processes, representing potential locking blocks.",
+        "timeToImpact": "< 10 mins",
+        "baseLikelihood": 16,
+        "ruleInfo": 'Scans: "DB Request Time"',
+        "base": "Note 100303"
+    },
+    {
+        "id": "cpu-warn",
+        "name": "CPU Performance Host Squeeze",
+        "category": "OS/DB (ST06)",
+        "searchTerms": ["CPU Utilization > 90%", "CPU Usr 8", "CPU Usr 9", "CPU Usr 100", "CPU Util"],
+        "affectedComponent": "OS Resource Scheduler",
+        "recommendation": "Identify intensive parallel threads via SM66, migrate scheduled batches to idle times, or provision additional compute cores.",
+        "description": "Monitors system user space processor saturation patterns that starve application work queues.",
+        "timeToImpact": "< 20 mins",
+        "baseLikelihood": 12,
+        "ruleInfo": 'Scans: "CPU Utilization", "CPU Usr"',
+        "base": "Note 100304"
+    },
+    {
+        "id": "mem-warn",
+        "name": "Host Memory Saturated (<5%)",
+        "category": "OS/DB (ST06)",
+        "searchTerms": ["Memory Free < 5%", "Mem Free 120MB", "Mem Free 1", "Mem Free 2", "Mem Free 3", "Mem Free 4", "Mem Free 5"],
+        "affectedComponent": "OS Swap & Physical Daemon",
+        "recommendation": "Verify physical host virtualization overlays. Optimize standard work process quotas inside profile parameters.",
+        "description": "Searches for physical host memory depletes that risk hypervisor or kernel OOM allocations.",
+        "timeToImpact": "< 5 mins",
+        "baseLikelihood": 7,
+        "ruleInfo": 'Scans: "Memory Free", "Mem Free"',
+        "base": "Note 100305"
+    },
+    {
+        "id": "swap-warn",
+        "name": "Host Memory Swap Overload",
+        "category": "OS/DB (ST06)",
+        "searchTerms": ["Swap Utilization High", "Swap Free 5%", "Swap Free 1%", "Swap Free 2%", "Swap Free 3%", "Swap Free 4%"],
+        "affectedComponent": "Host Virtual Paging Device",
+        "recommendation": "Review swap volume provisioning relative to SAP installation guides. Clean unused system segments.",
+        "description": "Tracks physical disk spillover rate when active RAM space is fully booked.",
+        "timeToImpact": "< 15 mins",
+        "baseLikelihood": 9,
+        "ruleInfo": 'Scans: "Swap Free", "Swap Utilization"',
+        "base": "Note 100306"
+    }
+]
 
 # ======================================================================
 # SECTION: DESKTOP DATA SYNC (LOG LOADERS)
 # ======================================================================
+import os
+import re
+import random
+from datetime import datetime
+import pandas as pd
+import streamlit as st
 
-
-
-
-
-
-
-
+import dataset_generator
 
 DESKTOP_DIR = r"D:\Thesis\Logs\Work"
 
@@ -1186,30 +1119,8 @@ def map_log_line_to_error_tag(log_line):
 # SECTION 4: DATA INGESTION & LOCAL CSV LOADER ENGINE
 # Description: Loads raw performance/alert CSV logs and maps column headers.
 # ==============================================================================
-def get_csv_mtimes_hash():
-    paths = [
-        os.path.join(DESKTOP_DIR, 'dev_w_Traces.csv'),
-        os.path.join(DESKTOP_DIR, 'SM21_Logs.csv'),
-        os.path.join(DESKTOP_DIR, 'ST22_Dumps.csv'),
-        os.path.join(DESKTOP_DIR, 'ST03.csv'),
-        os.path.join(DESKTOP_DIR, 'ST06_CPU.csv'),
-        os.path.join(DESKTOP_DIR, 'ST06_Memory.csv'),
-        os.path.join(DESKTOP_DIR, 'sap_notes_kba_reference.xlsx')
-    ]
-    mtimes = []
-    for p in paths:
-        if os.path.exists(p):
-            try:
-                mtimes.append(os.path.getmtime(p))
-            except Exception:
-                mtimes.append(0.0)
-        else:
-            mtimes.append(0.0)
-    return hash(tuple(mtimes))
-
-
-@st.cache_data(show_spinner=True)
-def load_logs_from_csv(mtimes_hash):
+@st.cache_data
+def load_logs_from_csv():
     # 1. Paths
     dev_w_path = os.path.join(DESKTOP_DIR, 'dev_w_Traces.csv')
     sm21_path = os.path.join(DESKTOP_DIR, 'SM21_Logs.csv')
@@ -1318,14 +1229,14 @@ def load_logs_from_csv(mtimes_hash):
             st.warning(f"Failed to integrate sap_notes_kba_reference: {ref_err}")
 
     # Vectorized datetime conversions in Pandas
-    dev_w_df['datetime'] = pd.to_datetime(dev_w_df['Date'] + ' ' + dev_w_df['Time'], format='%Y-%m-%d %H:%M:%S', cache=True)
+    dev_w_df['datetime'] = pd.to_datetime(dev_w_df['Date'] + ' ' + dev_w_df['Time'], format='%Y-%m-%d %H:%M:%S')
     
     dates = sm21_df['Date in Format YYYYMMSS in 8 Characters'].astype(int).astype(str)
     if sm21_df['TIME'].astype(str).str.contains(':').any():
         times = sm21_df['TIME'].astype(str).str.replace(':', '')
     else:
         times = sm21_df['TIME'].astype(int).apply(lambda x: f"{x:06d}")
-    sm21_df['datetime'] = pd.to_datetime(dates + ' ' + times, format='%Y%m%d %H%M%S', cache=True)
+    sm21_df['datetime'] = pd.to_datetime(dates + ' ' + times, format='%Y%m%d %H%M%S')
     sm21_df = sm21_df.sort_values('datetime', ascending=False)
 
     # Map raw priority codes to standard emojis
@@ -1341,29 +1252,27 @@ def load_logs_from_csv(mtimes_hash):
     try:
         st22_df['datetime'] = pd.to_datetime(
             st22_df['Date [System Time (CET)]'] + ' ' + st22_df['Time [System Time (CET)]'],
-            format='%Y-%m-%d %H:%M:%S',
-            cache=True
+            format='%Y-%m-%d %H:%M:%S'
         )
     except Exception:
         st22_df['datetime'] = pd.to_datetime(
             st22_df['Date [System Time (CET)]'] + ' ' + st22_df['Time [System Time (CET)]'],
-            format='%d-%m-%Y %H:%M:%S',
-            cache=True
+            format='%d-%m-%Y %H:%M:%S'
         )
     st22_df = st22_df.sort_values('datetime', ascending=False)
 
-
+    import re
     st03_df.columns = [re.sub(r'[^\x00-\x7F]+', '', c).strip() for c in st03_df.columns]
     try:
-        st03_df['datetime'] = pd.to_datetime(st03_df['Date'], format='%Y-%m-%d', cache=True)
+        st03_df['datetime'] = pd.to_datetime(st03_df['Date'], format='%Y-%m-%d')
     except Exception:
-        st03_df['datetime'] = pd.to_datetime(st03_df['Date'], format='%d-%m-%Y', cache=True)
+        st03_df['datetime'] = pd.to_datetime(st03_df['Date'], format='%d-%m-%Y')
     st03_df = st03_df.sort_values(['datetime', 'Task Type'], ascending=[False, True])
 
-    cpu_df['datetime'] = pd.to_datetime(cpu_df['Date'], cache=True)
-    mem_df['datetime'] = pd.to_datetime(mem_df['Date'], cache=True)
+    cpu_df['datetime'] = pd.to_datetime(cpu_df['Date'])
+    mem_df['datetime'] = pd.to_datetime(mem_df['Date'])
     st06_merged = pd.concat([cpu_df, mem_df.drop(columns=['Date', 'Hour', 'datetime'], errors='ignore')], axis=1)
-    st06_merged['datetime'] = pd.to_datetime(st06_merged['Date'], cache=True)
+    st06_merged['datetime'] = pd.to_datetime(st06_merged['Date'])
     st06_merged = st06_merged.sort_values(['datetime', 'Hour'], ascending=[False, False])
 
     # Downsample dev_w normal traces (keep all errors/warnings, sample 10% of normal heartbeats)
@@ -1470,12 +1379,7 @@ def load_logs_from_csv(mtimes_hash):
         date_val = row['Date [System Time (CET)]']
         time_val = row['Time [System Time (CET)]']
         
-        st22_file_obj = {
-            "id": file_id,
-            "name": filename,
-            "dump_text": dump_txt,
-            "datetime": dt
-        }
+        st22_file_obj = make_st22_file(file_id, filename, dump_txt, dt)
         st22_file_obj.update({
             "err_lbl": err_lbl,
             "prog_lbl": prog_lbl,
@@ -1591,25 +1495,25 @@ def load_logs_from_csv(mtimes_hash):
 # SECTION: AI LOG SIGNATURES SCANNER
 # ======================================================================
 # AI and ML Services for SAP Forensics Sandbox
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+import os
+import re
+import json
+import time
+import random
+import numpy as np
+import pandas as pd
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, classification_report
+from sklearn.ensemble import IsolationForest
+from sklearn.svm import OneClassSVM
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
 
 # Try importing Google GenAI SDK
 try:
-
-
+    from google import genai
+    from google import genai as types
     GENAI_AVAILABLE = True
 except ImportError:
     GENAI_AVAILABLE = False
@@ -1683,7 +1587,7 @@ def classify_error(log_text):
 
 @st.cache_resource
 def get_sentence_transformer_model():
-
+    from sentence_transformers import SentenceTransformer
     return SentenceTransformer('all-MiniLM-L6-v2')
 
 def detect_novelty(log_text, known_patterns):
@@ -2101,7 +2005,7 @@ def get_ml_evaluation_metrics(anomaly_input, text_input=None, generic_logs=None,
     vectorizer = TfidfVectorizer(token_pattern=r'(?u)[a-zA-Z0-9_\-]+')
     X_vec = vectorizer.fit_transform(X)
     
-
+    from sklearn.model_selection import train_test_split
     X_train, X_test, y_train, y_test = train_test_split(X_vec, y, test_size=0.2, random_state=42)
     
     clf = LogisticRegression(random_state=42, C=float(logreg_c), solver=logreg_solver, class_weight=logreg_class_weight, max_iter=500)
@@ -2527,14 +2431,14 @@ def get_ml_evaluation_metrics(anomaly_input, text_input=None, generic_logs=None,
 # ======================================================================
 # SECTION: BAYESIAN ALERTS INFRASTRUCTURE & VIEWS
 # ======================================================================
-
-
-
-
-
-
-
-
+import re
+import random
+import math
+import textwrap
+from datetime import datetime, timedelta
+from dataclasses import dataclass, field
+import streamlit as st
+import pandas as pd
 
 # ==============================================================================
 # SECTION 7: BAYESIAN INFERENCE EVIDENCE GROUPS & TAXONOMY
@@ -2982,11 +2886,11 @@ PROGRESSION_PATHS = [
     ["LOCK_STRESS", "ENQUEUE_LOCK_FAILURE", "LOCK_TABLE_OVERFLOW", "WORK_PROCESS_RESTART"]
 ]
 
-
-
-
-
-
+def get_probable_progression_chain(incident):
+    for path in PROGRESSION_PATHS:
+        if incident in path:
+            return path
+    return [incident]
 
 
 
@@ -3223,11 +3127,11 @@ PROGRESSION_PATHS = [
     ["LOCK_STRESS", "ENQUEUE_LOCK_FAILURE", "LOCK_TABLE_OVERFLOW", "WORK_PROCESS_RESTART"]
 ]
 
-
-
-
-
-
+def get_probable_progression_chain(incident):
+    for path in PROGRESSION_PATHS:
+        if incident in path:
+            return path
+    return [incident]
 
 
 
@@ -3312,7 +3216,7 @@ def extract_all_events(include_all=False, config=None):
     # 2. ST22 dumps (always anomalies)
     for f in generic_logs.get("st22", []):
         dt = f.get("datetime")
-        text_block = f.get("dump_text") or "\n".join([line["text"] for line in f.get("lines", [])])
+        text_block = "\n".join([line["text"] for line in f.get("lines", [])])
         if not dt:
             m = re.search(r'Date and Time\s+([\d\-\.\/]+ [\d:]+)', text_block)
             if m:
@@ -3800,47 +3704,47 @@ def calculate_brier_score(y_true, y_pred_probs, classes):
     brier = np.mean(np.sum((y_pred_probs - y_true_one_hot) ** 2, axis=1))
     return float(brier)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+def plot_reliability_diagram(y_true, y_pred_probs, y_pred_labels, n_bins=10):
+    bin_boundaries = np.linspace(0, 1, n_bins + 1)
+    confidences = np.max(y_pred_probs, axis=1)
+    accuracies = (y_pred_labels == y_true)
+    
+    bin_accs = []
+    bin_confs = []
+    bin_counts = []
+    
+    for i in range(n_bins):
+        bin_lower = bin_boundaries[i]
+        bin_upper = bin_boundaries[i + 1]
+        in_bin = (confidences > bin_lower) & (confidences <= bin_upper)
+        if np.sum(in_bin) > 0:
+            bin_accs.append(np.mean(accuracies[in_bin]))
+            bin_confs.append(np.mean(confidences[in_bin]))
+            bin_counts.append(int(np.sum(in_bin)))
+        else:
+            bin_accs.append(0.0)
+            bin_confs.append((bin_lower + bin_upper) / 2.0)
+            bin_counts.append(0)
+            
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=[0, 1], y=[0, 1], mode='lines', name='Perfect Calibration', line=dict(dash='dash', color='gray')))
+    fig.add_trace(go.Bar(x=[(bin_boundaries[i] + bin_boundaries[i+1])/2 for i in range(n_bins)], 
+                         y=bin_accs, 
+                         name='Actual Accuracy',
+                         marker_color='rgb(55, 83, 109)',
+                         text=[f"Count: {c}" for c in bin_counts],
+                         hoverinfo='text+x+y'))
+                         
+    fig.update_layout(
+        title="Reliability Diagram (Calibration Curve)",
+        xaxis_title="Confidence",
+        yaxis_title="Accuracy",
+        xaxis=dict(range=[0, 1]),
+        yaxis=dict(range=[0, 1]),
+        template="plotly_dark",
+        margin=dict(l=40, r=40, t=40, b=40)
+    )
+    return fig
 
 def calculate_kl_divergence(p_dist, q_dist):
     kl = 0.0
@@ -4071,20 +3975,20 @@ def seed_confirmed_incidents_if_needed(windows):
             
     return confirmed
 
+def is_step_supported(step, observed_indicators):
+    if step in observed_indicators:
+        return True
+    if step in INCIDENT_EVIDENCE_MAP:
+        pos_inds = INCIDENT_EVIDENCE_MAP[step].get("positive", [])
+        if any(ind in observed_indicators for ind in pos_inds):
+            return True
+    return False
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+def build_dynamic_cause_chain(top_incident_id, observed_indicators, window_events=None):
+    if window_events is None:
+        window_events = []
+    res = build_causal_dag_chain(top_incident_id, observed_indicators, window_events)
+    return res["chain_nodes"]
 
 
 # ==============================================================================
@@ -4116,7 +4020,7 @@ def calculate_bayesian_posteriors(window_events, priors, registry, st03_config, 
     if all_system_events is None:
         all_system_events = extract_all_events(include_all=True, config=st03_config)
     
-
+    import bisect
     all_system_events.sort(key=lambda x: x["timestamp"])
     event_times = [e["timestamp"] for e in all_system_events]
     
@@ -4342,9 +4246,10 @@ def validate_pattern(pattern, logs, generic_logs, raw_study):
         }
         
     raw_lines = [line.strip() for line in raw_study.split("\n") if line.strip()]
+    unique_raw_lines = list(set(raw_lines))
     
     unique_occurrences = 0
-    for line in raw_lines:
+    for line in unique_raw_lines:
         line_upper = line.upper()
         if any(t.upper() in line_upper for t in terms):
             unique_occurrences += 1
@@ -4365,25 +4270,16 @@ def validate_pattern(pattern, logs, generic_logs, raw_study):
                 
     for cat, files in generic_logs.items():
         for f in files:
-            if cat == "st22" and "lines" not in f and "dump_text" in f:
-                for txt in f["dump_text"].split("\n"):
-                    txt = txt.strip()
-                    if not txt:
-                        continue
-                    txt_upper = txt.upper()
-                    if any(t.upper() in txt_upper for t in terms):
+            for line in f.get("lines", []):
+                txt = line.get("text", "").strip()
+                if not txt:
+                    continue
+                txt_upper = txt.upper()
+                if any(t.upper() in txt_upper for t in terms):
+                    if line.get("isError", False) or cat == "st22":
                         unique_error_telemetry.add(txt)
-            else:
-                for line in f.get("lines", []):
-                    txt = line.get("text", "").strip()
-                    if not txt:
-                        continue
-                    txt_upper = txt.upper()
-                    if any(t.upper() in txt_upper for t in terms):
-                        if line.get("isError", False) or cat == "st22":
-                            unique_error_telemetry.add(txt)
-                        else:
-                            unique_normal_telemetry.add(txt)
+                    else:
+                        unique_normal_telemetry.add(txt)
                         
     telemetry_support = len(unique_error_telemetry) + len(unique_normal_telemetry)
     confidence = len(unique_error_telemetry) / telemetry_support if telemetry_support > 0 else 0.0
@@ -4619,7 +4515,7 @@ def render_bayesian_alerts():
             ml_prob_pct = 0.0
             if "text_clf" in st.session_state and "text_vectorizer" in st.session_state and "text_scaler" in st.session_state:
                 try:
-
+                    from scipy.sparse import hstack, csr_matrix
                     window_text = " ".join([e["text"] for e in selected_window])
                     all_system_events = st.session_state.get("all_system_events", [])
                     event_times = st.session_state.get("event_times", [])
@@ -4633,14 +4529,7 @@ def render_bayesian_alerts():
                     
                     feats = extract_window_telemetry_features(selected_window, all_system_events, event_times, st03_config)
                     feats_df = pd.DataFrame([feats])
-                    feature_cols = [
-                        "dialog_resp", "db_req", "cpu_util", "mem_free_inv", "swap_util", "st22_dumps", "sm21_errors", "active_wps", "sessions",
-                        "total_events", "burst_ratio_cpu", "cpu_trend", "mem_trend", "resp_trend",
-                        "mean_cpu_util", "std_cpu_util", "p95_cpu_util",
-                        "mean_resp", "std_resp", "p95_resp",
-                        "mean_db", "std_db", "p95_db",
-                        "sin_hour", "cos_hour", "day_of_week"
-                    ]
+                    feature_cols = ["dialog_resp", "db_req", "cpu_util", "mem_free_inv", "swap_util", "st22_dumps", "sm21_errors", "active_wps", "sessions"]
                     
                     X_win_text = st.session_state.text_vectorizer.transform([window_text])
                     X_win_feats = st.session_state.text_scaler.transform(feats_df[feature_cols])
@@ -4882,7 +4771,7 @@ User query: {chat_prompt}
                                 # Fallback: ML Log Text Classifier with actual window features!
                                 if "text_clf" in st.session_state and "text_vectorizer" in st.session_state and "text_scaler" in st.session_state:
                                     try:
-
+                                        from scipy.sparse import hstack, csr_matrix
                                         st03_config = {
                                             "resp_time_thresh": 5000,
                                             "db_time_thresh": 2000,
@@ -4895,14 +4784,7 @@ User query: {chat_prompt}
                                         
                                         feats = extract_window_telemetry_features(selected_window, all_system_events, event_times, st03_config)
                                         feats_df = pd.DataFrame([feats])
-                                        feature_cols = [
-                                            "dialog_resp", "db_req", "cpu_util", "mem_free_inv", "swap_util", "st22_dumps", "sm21_errors", "active_wps", "sessions",
-                                            "total_events", "burst_ratio_cpu", "cpu_trend", "mem_trend", "resp_trend",
-                                            "mean_cpu_util", "std_cpu_util", "p95_cpu_util",
-                                            "mean_resp", "std_resp", "p95_resp",
-                                            "mean_db", "std_db", "p95_db",
-                                            "sin_hour", "cos_hour", "day_of_week"
-                                        ]
+                                        feature_cols = ["dialog_resp", "db_req", "cpu_util", "mem_free_inv", "swap_util", "st22_dumps", "sm21_errors", "active_wps", "sessions"]
                                         
                                         vec = st.session_state.text_vectorizer.transform([chat_prompt])
                                         X_win_feats = st.session_state.text_scaler.transform(feats_df[feature_cols])
@@ -5036,12 +4918,14 @@ User query: {chat_prompt}
 # ======================================================================
 # SECTION: GENERAL VIEWS
 # ======================================================================
-
-
-
-
+from datetime import datetime, timedelta
+import streamlit as st
+import pandas as pd
+import plotly.graph_objects as go
 
 def render_dashboard():
+    st.header("📊 TraceAnalyst AI — System Global Dashboard")
+    st.caption("Aggregated NetWeaver telemetry, database performance, and diagnostic analytics. Monitor Active.")
     
     # Calculate min and max date from st.session_state.original_full_logs
     if "original_full_logs" in st.session_state:
@@ -5078,7 +4962,7 @@ def render_dashboard():
         except Exception:
             pass
             
-    default_start = saved_start if saved_start else (max_date.replace(day=1) if max_date else min_date)
+    default_start = saved_start if saved_start else min_date
     default_end = saved_end if saved_end else max_date
     
     default_start = max(min_date, min(max_date, default_start))
@@ -5223,91 +5107,36 @@ def render_dashboard():
     st.subheader("📈 Cross-Platform Anomaly Trend")
     
     # Process graph buckets matching React AreaChart
-    wp_buckets = {}
-    st22_buckets = {}
-    sm21_buckets = {}
-    
-    # 1. WP Trace Anomalies (Filter to only actual errors/warnings, not normal heartbeats)
+    buckets = {}
     for l in st.session_state.full_logs:
-        if not l.get("isNormal", False):
-            d = l.get("datetime")
-            if not d and l.get("timestamp"):
-                try:
-                    d = datetime.fromisoformat(l["timestamp"])
-                except Exception:
-                    pass
-            if d:
-                sort_key = f"{d.strftime('%Y-%m-%d')} {d.strftime('%H')}:00"
-                wp_buckets[sort_key] = wp_buckets.get(sort_key, 0) + l.get("count", 1)
-                
-    # 2. ST22 Short Dumps (All ST22 dumps are runtime exceptions/anomalies)
-    for f in st.session_state.full_generic_logs.get("st22", []):
-        d = f.get("datetime")
-        if d:
-            sort_key = f"{d.strftime('%Y-%m-%d')} {d.strftime('%H')}:00"
-            st22_buckets[sort_key] = st22_buckets.get(sort_key, 0) + 1
-            
-    # 3. SM21 System Log Errors (Filter to priority icon errors/warnings)
-    for f in st.session_state.full_generic_logs.get("sm21", []):
-        for line in f.get("lines", []):
-            if line.get("isError", False):
-                d = line.get("datetime")
-                if d:
-                    sort_key = f"{d.strftime('%Y-%m-%d')} {d.strftime('%H')}:00"
-                    sm21_buckets[sort_key] = sm21_buckets.get(sort_key, 0) + 1
-
-    all_keys = sorted(list(set(wp_buckets.keys()) | set(st22_buckets.keys()) | set(sm21_buckets.keys())))
-    if not all_keys:
+        d = l.get("datetime")
+        if not d:
+            d = datetime.fromisoformat(l["timestamp"])
+        sort_key = f"{d.strftime('%Y-%m-%d')} {d.strftime('%H')}:00"
+        buckets[sort_key] = buckets.get(sort_key, 0) + l.get("count", 1)
+        
+    if not buckets:
         # Fallback to current date/time if no logs found
         now_dt = datetime.now()
         for i in range(10):
             d = now_dt - timedelta(hours=i)
             sort_key = f"{d.strftime('%Y-%m-%d')} {d.strftime('%H')}:00"
-            all_keys.append(sort_key)
-        all_keys = sorted(all_keys)
-        
-    df_trend = pd.DataFrame([
-        {
-            "Time": k,
-            "WP Traces": wp_buckets.get(k, 0),
-            "ABAP Dumps (ST22)": st22_buckets.get(k, 0),
-            "System Logs (SM21)": sm21_buckets.get(k, 0)
-        }
-        for k in all_keys
-    ])
+            buckets[sort_key] = 0
+            
+    df_trend = pd.DataFrame([{"Time": k, "Events count": v} for k, v in buckets.items()])
     df_trend = df_trend.sort_values("Time")
     
     fig = go.Figure()
     fig.add_trace(go.Scatter(
         x=df_trend["Time"],
-        y=df_trend["WP Traces"],
+        y=df_trend["Events count"],
         fill='tozeroy',
         mode='lines+markers',
-        line=dict(color='#6366f1', width=2),
-        fillcolor='rgba(99, 102, 241, 0.1)',
-        name="Work Process Errors (dev_w*)"
-    ))
-    fig.add_trace(go.Scatter(
-        x=df_trend["Time"],
-        y=df_trend["ABAP Dumps (ST22)"],
-        fill='tozeroy',
-        mode='lines+markers',
-        line=dict(color='#ef4444', width=2),
-        fillcolor='rgba(239, 68, 68, 0.1)',
-        name="ABAP Short Dumps (ST22)"
-    ))
-    fig.add_trace(go.Scatter(
-        x=df_trend["Time"],
-        y=df_trend["System Logs (SM21)"],
-        fill='tozeroy',
-        mode='lines+markers',
-        line=dict(color='#f59e0b', width=2),
-        fillcolor='rgba(245, 158, 11, 0.1)',
-        name="System Log Errors (SM21)"
+        line=dict(color='#6366f1', width=3),
+        fillcolor='rgba(99, 102, 241, 0.15)',
+        name="Ingested events"
     ))
     fig.update_layout(
-        xaxis_title="Time",
-        yaxis_title="Events count",
         plot_bgcolor='rgba(0,0,0,0)',
         paper_bgcolor='rgba(0,0,0,0)',
         font=dict(color='#94a3b8', family='Outfit'),
@@ -5319,7 +5148,7 @@ def render_dashboard():
     st.plotly_chart(fig, use_container_width=True)
     
     # Chronological recent logs
-    #st.subheader("📢 Recent Trace Log stream (dev_w*)")
+    st.subheader("📢 Recent Trace Log stream (dev_w*)")
     data_table = []
     for l in st.session_state.full_logs[:1000]:
         data_table.append({
@@ -5329,11 +5158,11 @@ def render_dashboard():
             "Pattern Signature / Ingested Event": l["semanticGroup"],
             "Count": l.get("count", 1)
         })
-    #st.dataframe(pd.DataFrame(data_table), use_container_width=True, hide_index=True, height=400)
+    st.dataframe(pd.DataFrame(data_table), use_container_width=True, hide_index=True, height=400)
 
     # Monthly records distribution table
     st.subheader("📅 Log Records Distribution by Month & Transaction")
-
+    from collections import defaultdict
     counts = defaultdict(lambda: defaultdict(int))
 
     # 1. dev_w* (st.session_state.full_logs)
@@ -5398,11 +5227,11 @@ def render_dashboard():
         st.info("No records available in the logs to display monthly distribution.")
 
 
-
-
-
-
-
+from datetime import datetime
+from collections import Counter
+import streamlit as st
+import pandas as pd
+import plotly.graph_objects as go
 
 def render_work_process():
     st.header("🔴 Developer Work Process Trace Viewer (dev_w*)")
@@ -5453,8 +5282,6 @@ def render_work_process():
             fillcolor="rgba(239, 68, 68, 0.08)"
         ))
         fig_w_line.update_layout(
-            xaxis_title="Time",
-            yaxis_title="Errors Count",
             plot_bgcolor='rgba(0,0,0,0)',
             paper_bgcolor='rgba(0,0,0,0)',
             font=dict(color='#94a3b8', family='Outfit'),
@@ -5484,8 +5311,6 @@ def render_work_process():
                 )
             ))
             fig_w_bar.update_layout(
-                xaxis_title="Count",
-                yaxis_title="Semantic Cluster",
                 plot_bgcolor='rgba(0,0,0,0)',
                 paper_bgcolor='rgba(0,0,0,0)',
                 font=dict(color='#94a3b8', family='Outfit'),
@@ -5585,10 +5410,10 @@ def render_work_process():
                         st.success(f"**🚀 Recommended Correction Roadmap:**\n{sol_html}")
 
 
-
-
-
-
+import re
+from datetime import datetime
+import streamlit as st
+import pandas as pd
 
 def render_abap_dumps():
     st.header("⚡ ABAP Short Dumps (ST22)")
@@ -5651,17 +5476,7 @@ def render_abap_dumps():
             if not current_file:
                 st.info("No dump details available.")
                 return
-            dump_txt = current_file.get("dump_text") or "\n".join(l["text"] for l in current_file.get("lines", []))
-            
-            if "lines" in current_file:
-                current_file_parsed = current_file
-            else:
-                current_file_parsed = make_st22_file(
-                    current_file["id"],
-                    current_file["name"],
-                    dump_txt,
-                    current_file["datetime"]
-                )
+            dump_txt = "\n".join(l["text"] for l in current_file["lines"])
             
             err_lbl = current_file.get("err_lbl")
             if err_lbl is None:
@@ -5699,7 +5514,7 @@ def render_abap_dumps():
                 st.subheader("Code Execution Context:")
                 code_lines = []
                 capturing = False
-                for line in current_file_parsed["lines"]:
+                for line in current_file["lines"]:
                     if "Source Code Extract" in line["text"]:
                         capturing = True
                         continue
@@ -5720,7 +5535,7 @@ def render_abap_dumps():
                     st.subheader("Excerpt System Variables")
                     sys_vars = []
                     capturing_sys = False
-                    for line in current_file_parsed["lines"]:
+                    for line in current_file["lines"]:
                         text = line["text"]
                         if "System Fields" in text:
                             capturing_sys = True
@@ -5745,7 +5560,7 @@ def render_abap_dumps():
                     st.subheader("Call Stack Tracing")
                     stack_traces = []
                     capturing_stack = False
-                    for line in current_file_parsed["lines"]:
+                    for line in current_file["lines"]:
                         text = line["text"]
                         if "Active Calls" in text:
                             capturing_stack = True
@@ -5815,10 +5630,10 @@ def render_syslog():
         else:
             st.markdown("_No SM21 lines matched search parameters._")
 
-
-
-
-
+import re
+import streamlit as st
+import pandas as pd
+import plotly.graph_objects as go
 
 def render_performance():
     st.header("⏱️ Platform Hardware & Workload Performance")
@@ -5852,8 +5667,6 @@ def render_performance():
                 fig_st03.add_trace(go.Scatter(x=df_st03["Time"], y=df_st03["Response Time (ms)"], name="Avg Response Time (ms)", line=dict(color="#10b981", width=2.5)))
                 fig_st03.add_trace(go.Scatter(x=df_st03["Time"], y=df_st03["DB Latency (ms)"], name="DB Request Latency (ms)", line=dict(color="#f59e0b", width=2)))
                 fig_st03.update_layout(
-                    xaxis_title="Time",
-                    yaxis_title="Latency (ms)",
                     title="Transaction Latencies (ms)",
                     title_font=dict(size=12, color='#ffffff'),
                     plot_bgcolor='rgba(0,0,0,0)',
@@ -5901,8 +5714,6 @@ def render_performance():
                 fig_cpu.add_trace(go.Scatter(x=df_st06["Time"], y=df_st06["CPU User (%)"], name="CPU User %", fill='tozeroy', line=dict(color="#818cf8", width=2)))
                 fig_cpu.add_trace(go.Scatter(x=df_st06["Time"], y=df_st06["CPU System (%)"], name="CPU System %", fill='tonexty', line=dict(color="#a7f3d0", width=1.5)))
                 fig_cpu.update_layout(
-                    xaxis_title="Time",
-                    yaxis_title="CPU Utilization (%)",
                     title="Host CPU Utilization %",
                     title_font=dict(size=12, color='#ffffff'),
                     plot_bgcolor='rgba(0,0,0,0)',
@@ -5920,7 +5731,6 @@ def render_performance():
                 fig_mem.add_trace(go.Scatter(x=df_st06["Time"], y=df_st06["Memory Free (MB)"], name="Free Memory (MB)", line=dict(color="#38bdf8", width=2)))
                 fig_mem.add_trace(go.Scatter(x=df_st06["Time"], y=df_st06["Swap Free (%)"], name="Free Swap %", line=dict(color="#f43f5e", width=1.5, dash="dash"), yaxis="y2"))
                 fig_mem.update_layout(
-                    xaxis_title="Time",
                     title="Memory & Swap Availability",
                     title_font=dict(size=12, color='#ffffff'),
                     plot_bgcolor='rgba(0,0,0,0)',
@@ -5935,12 +5745,12 @@ def render_performance():
                 )
                 st.plotly_chart(fig_mem, use_container_width=True)
 
-
-
-
-
-
-
+import re
+import time
+import random
+import streamlit as st
+import pandas as pd
+import plotly.graph_objects as go
 
 
 def render_correlation_heatmap(correlation, labels):
@@ -5988,7 +5798,7 @@ def render_classification_report_table(report_dict):
 
 
 def render_plotly_calibration_curve(y_true, y_probs, y_pred, n_bins=10, title="Reliability Diagram"):
-
+    import plotly.graph_objects as go
     
     bin_boundaries = np.linspace(0, 1, n_bins + 1)
     confidences = np.max(y_probs, axis=1)
@@ -6685,8 +6495,6 @@ def render_ml_studio():
                         hovertext=[f"Index: {idx}<br/>Resp: {r}ms<br/>CPU: {c}%" for idx, r, c in zip(df_pca["idx"], df_pca["resp"], df_pca["cpu"])]
                     ))
                     fig_pca.update_layout(
-                        xaxis_title="Principal Component 1",
-                        yaxis_title="Principal Component 2",
                         plot_bgcolor='rgba(0,0,0,0)',
                         paper_bgcolor='rgba(0,0,0,0)',
                         font=dict(color='#94a3b8', family='Outfit'),
@@ -6803,15 +6611,15 @@ def render_ml_studio():
     # RENDER 4: Terminal console at the bottom of the tab
     render_terminal_box(st.session_state.terminal_logs)
 
-
-
-
-
-
-
-
-
-
+import os
+import time
+import random
+from datetime import datetime, timedelta
+import streamlit as st
+import pandas as pd
+import numpy as np
+import plotly.graph_objects as go
+import plotly.express as px
 
 # Standalone Gemini Administrator Assistant tab has been deprecated and embedded directly into the Bayesian Incident Correlation alerts tab.
 
@@ -6871,7 +6679,7 @@ def plot_incident_progression_sankey(incident_filter=None, time_range=None, syst
     if len(sequence) < 2:
         return None, pd.DataFrame()
         
-
+    from collections import defaultdict
     transition_counts = defaultdict(int)
     transition_times = defaultdict(list)
     
@@ -7250,7 +7058,7 @@ def plot_calibration_curve(model_name):
     return fig, ece_val, brier_val
 
 def plot_rca_graph(incident_type=None, system_filter=None, time_range=None):
-
+    from collections import defaultdict
     rca_info = st.session_state.get("rca_windows_info", [])
     if not rca_info:
         return None, []
@@ -7407,8 +7215,8 @@ def plot_rca_graph(incident_type=None, system_filter=None, time_range=None):
     fig.update_layout(
         title="Root Cause Analysis Causal Chain Graph",
         title_font=dict(size=14, color='#ffffff'),
-        xaxis=dict(title="Causal Layer (Root -> Intermediate -> Symptom)", showgrid=False, zeroline=False, showticklabels=False, range=[-0.2, 2.2]),
-        yaxis=dict(title="Vertical Node Position", showgrid=False, zeroline=False, showticklabels=False, range=[-0.1, 1.1]),
+        xaxis=dict(showgrid=False, zeroline=False, showticklabels=False, range=[-0.2, 2.2]),
+        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False, range=[-0.1, 1.1]),
         font=dict(color='#94a3b8', family='Outfit'),
         plot_bgcolor='rgba(0,0,0,0)',
         paper_bgcolor='rgba(15, 23, 42, 0.4)',
@@ -7539,8 +7347,6 @@ def plot_lead_time_analysis(model_name="Bayesian Engine"):
         color_discrete_sequence=px.colors.qualitative.Safe
     )
     fig_hist.update_layout(
-        xaxis_title="Warning Lead Time (Minutes)",
-        yaxis_title="Count of Failures",
         font=dict(color='#94a3b8', family='Outfit'),
         plot_bgcolor='rgba(0,0,0,0)',
         paper_bgcolor='rgba(15, 23, 42, 0.4)',
@@ -7557,8 +7363,6 @@ def plot_lead_time_analysis(model_name="Bayesian Engine"):
         color_discrete_sequence=px.colors.qualitative.Safe
     )
     fig_box.update_layout(
-        xaxis_title="Failure Category",
-        yaxis_title="Lead Time (Minutes)",
         font=dict(color='#94a3b8', family='Outfit'),
         plot_bgcolor='rgba(0,0,0,0)',
         paper_bgcolor='rgba(15, 23, 42, 0.4)',
@@ -7577,8 +7381,6 @@ def plot_lead_time_analysis(model_name="Bayesian Engine"):
         color_discrete_sequence=px.colors.qualitative.Safe
     )
     fig_bar.update_layout(
-        xaxis_title="Failure Category",
-        yaxis_title="Average Lead Time (Minutes)",
         font=dict(color='#94a3b8', family='Outfit'),
         plot_bgcolor='rgba(0,0,0,0)',
         paper_bgcolor='rgba(15, 23, 42, 0.4)',
@@ -7931,15 +7733,15 @@ def render_predictive_performance():
 # ======================================================================
 # SECTION: STATE MANAGER
 # ======================================================================
-
-
-
-
+import os
+import json
+import streamlit as st
+from datetime import datetime, timedelta
 
 LOGS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "generated_logs")
 os.makedirs(LOGS_DIR, exist_ok=True)
-
-
+LOGS_FILE = os.path.join(LOGS_DIR, "logs.json")
+GENERIC_LOGS_FILE = os.path.join(LOGS_DIR, "generic_logs.json")
 CONFIRMED_FILE = os.path.join(LOGS_DIR, "confirmed_incidents.json")
 
 # ==============================================================================
@@ -7993,7 +7795,7 @@ def apply_global_date_filter():
         except Exception:
             pass
             
-    default_start = saved_start if saved_start else (max_date.replace(day=1) if max_date else min_date)
+    default_start = saved_start if saved_start else min_date
     default_end = saved_end if saved_end else max_date
     
     default_start = max(min_date, min(max_date, default_start))
@@ -8065,8 +7867,7 @@ def apply_global_date_filter():
 def load_logs_from_disk():
     # Load all historical telemetry from local CSV files
     try:
-        mtimes_hash = get_csv_mtimes_hash()
-        logs, generic_logs, raw_dfs = load_logs_from_csv(mtimes_hash)
+        logs, generic_logs, raw_dfs = load_logs_from_csv()
         st.session_state.original_full_logs = logs
         st.session_state.original_full_generic_logs = generic_logs
         st.session_state.original_raw_dfs = raw_dfs
@@ -8100,7 +7901,7 @@ def init_state():
         model_path = os.path.join(LOGS_DIR, "ml_model.pkl")
         if os.path.exists(model_path):
             try:
-
+                import pickle
                 with open(model_path, "rb") as f:
                     model_data = pickle.load(f)
                 st.session_state.text_clf = model_data["clf"]
@@ -8317,9 +8118,9 @@ def extract_window_telemetry_features(w, all_system_events, event_times, st03_co
 
     # Fallback Standard Text Scan
     try:
-
-
-
+        import bisect
+        from datetime import timedelta
+        import re
         
         left_idx = bisect.bisect_left(event_times, w_start - timedelta(hours=24))
         right_idx = bisect.bisect_right(event_times, w_end + timedelta(hours=24))
@@ -8476,7 +8277,7 @@ def perform_train_test_split_and_train():
     raw_dfs = st.session_state.raw_dfs
         
     # Dynamic Time horizon filtering based on sidebar selector
-    time_period_selection = st.session_state.get("time_period_selection", "Last 1 Month")
+    time_period_selection = st.session_state.get("time_period_selection", "Last 6 Months (All)")
     time_period_days = {
         "Last 1 Month": 30,
         "Last 2 Months": 60,
@@ -8550,7 +8351,7 @@ def perform_train_test_split_and_train():
     
     # Pre-compute indicators for all correlated windows once
     window_indicators_cache = {}
-
+    import bisect
     for w in windows:
         if w:
             w_id = w[0]["timestamp"].isoformat()
@@ -8694,7 +8495,7 @@ def perform_train_test_split_and_train():
     likelihoods = {inc: {ind: 0.01 for ind in all_indicators} for inc in registry}
     beta_smooth = 0.1
     
-
+    import bisect
     all_system_events.sort(key=lambda x: x["timestamp"])
     event_times = [e["timestamp"] for e in all_system_events]
     
@@ -8779,7 +8580,7 @@ def perform_train_test_split_and_train():
         train_labels_for_bayes.append(gt)
         
     X_train_bayes = np.array(train_log_posteriors)
-
+    from sklearn.linear_model import LogisticRegression
     bayes_platt_scaler = LogisticRegression(class_weight="balanced", max_iter=200)
     bayes_platt_scaler.fit(X_train_bayes, train_labels_for_bayes)
     st.session_state.bayes_platt_scaler = bayes_platt_scaler
@@ -8829,8 +8630,8 @@ def perform_train_test_split_and_train():
     st.session_state.bayesian_calibrated_probs = bayes_calibrated_probs
     
     # 6. ML Log Text Classifier with Engineered Features
-
-
+    from scipy.sparse import hstack, csr_matrix
+    from sklearn.preprocessing import StandardScaler
     
     # Store all events and times in session state for dynamic UI lookup
     st.session_state.all_system_events = all_system_events
@@ -8896,7 +8697,7 @@ def perform_train_test_split_and_train():
     st.session_state.text_vectorizer = vectorizer
     st.session_state.text_scaler = scaler
     
-
+    import pickle
     try:
         model_data = {
             "clf": clf,
@@ -8926,7 +8727,7 @@ def perform_train_test_split_and_train():
     st.session_state.ml_report = mlr
 
     # Calculate additional metrics for reports
-
+    from sklearn.metrics import roc_auc_score, precision_recall_curve, auc
     ml_probs = clf.predict_proba(X_test)
     try:
         ml_roc_auc = roc_auc_score(test_labels, ml_probs, multi_class='ovr', average='macro')
@@ -9051,13 +8852,12 @@ if "split_completed" not in st.session_state:
 # ---------------- SIDEBAR CONTROLS ----------------
 with st.sidebar:
     st.title("TraceAnalyst AI")
-    st.markdown("---")
     st.write("**Train-Test Split Validation Studio**")
     st.markdown("---")
     
     # System Profile
     st.info("""
-    **Mode:** Offline Validation
+    **Mode:** Off-line Validation
     * 6-Month Static Dataset
     * Train-Test Split active
     """)
@@ -9066,7 +8866,7 @@ with st.sidebar:
     time_period = st.selectbox(
         "Data Time Horizon Selection:",
         options=["Last 1 Month", "Last 2 Months", "Last 3 Months", "Last 6 Months (All)"],
-        index=0,
+        index=3,
         help="Filter historical log data to a subset time window before training."
     )
     st.session_state.time_period_selection = time_period
